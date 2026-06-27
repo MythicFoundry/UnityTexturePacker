@@ -14,6 +14,14 @@ using UnityEngine.Windows;
 
 namespace ChannelPacker {
 	public class ChannelPacker : EditorWindow {
+		private const string PackageName = "com.mythicfoundry.channel-packer";
+		private const string PackageRoot = "Packages/" + PackageName;
+		private const string PackageDefaultPresetPath = PackageRoot + "/ChannelPackerDefault.asset";
+		private const string PackageFastPackPath = PackageRoot + "/Editor/ChannelPacker_FastPack.compute";
+		private const string UserSettingsFolder = "Assets/ChannelPacker";
+		private const string UserSettingsPath = UserSettingsFolder + "/ChannelPackerSettings.asset";
+		private const string UserDefaultPresetPath = UserSettingsFolder + "/ChannelPackerDefault.asset";
+
 		//Use a compute shader to greatly speed up packing time
 		[SerializeField]
 		private ComputeShader fastPack;
@@ -28,7 +36,7 @@ namespace ChannelPacker {
 		public float[] mults = new float[4] { 1, 1, 1, 1 };
 		public ColorChannel[] froms = new ColorChannel[4];
 		public bool[] inverts = new bool[4];
-		
+
 		private Texture2D previewAlbedo, previewNormal;
 
 		private RenderTexture[] blits = new RenderTexture[4];
@@ -49,6 +57,7 @@ namespace ChannelPacker {
 		}
 
 		private void OnEnable() {
+			LoadPackageAssets();
 			LoadSettings();
 			InitGUIStyles();
 			textureDimensions = Vector2Int.zero;
@@ -111,11 +120,17 @@ namespace ChannelPacker {
 
 			//Main Options
 			GUILayout.BeginVertical(EditorStyles.helpBox);
+			if(fastPack == null)
+				GUILayout.Label("Channel Packer compute shader was not found. Reimport the package or verify the package installation.", regularWarn);
+
+			EditorGUI.BeginDisabledGroup(fastPack == null);
 			if(GUILayout.Button("Pack Texture") && textureDimensions != Vector2Int.zero) {
 				CreatePackedTexture();
 				SaveTexture();
 				EditorUtility.ClearProgressBar();
 			}
+			EditorGUI.EndDisabledGroup();
+
 			if(GUILayout.Button("Clear All")) {
 				inputs[0] = inputs[1] = inputs[2] = inputs[3] = previewAlbedo = previewNormal = null;
 				previewMatViewer = null;
@@ -136,11 +151,13 @@ namespace ChannelPacker {
 
 			//Preview
 			if(previewShaderFound) {
+				EditorGUI.BeginDisabledGroup(fastPack == null);
 				if(GUILayout.Button("Update Preview") && textureDimensions != Vector2Int.zero) {
 					EditorUtility.DisplayProgressBar("Packing texture", "", 0f);
 					CreatePackedTexture();
 					EditorUtility.ClearProgressBar();
 				}
+				EditorGUI.EndDisabledGroup();
 
 				previewAlbedo = (Texture2D)EditorGUILayout.ObjectField("Preview Albedo (Optional)", previewAlbedo, typeof(Texture2D), false);
 				previewNormal = (Texture2D)EditorGUILayout.ObjectField("Preview Normal (Optional)", previewNormal, typeof(Texture2D), false);
@@ -166,6 +183,11 @@ namespace ChannelPacker {
 		}
 
 		private void CreatePackedTexture() {
+			if(fastPack == null) {
+				Debug.LogError("Channel Packer compute shader was not found.");
+				return;
+			}
+
 			finalTexture = new Texture2D(textureDimensions.x, textureDimensions.y, TextureFormat.ARGB32, false, true);
 			int blitKernel = fastPack.FindKernel("ChannelSet");
 
@@ -238,6 +260,8 @@ namespace ChannelPacker {
 				validTex = inputs[3];
 
 			string texPath = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(validTex));
+			if(string.IsNullOrEmpty(texPath) || texPath.StartsWith("Packages/"))
+				texPath = "Assets";
 
 			string path = EditorUtility.SaveFilePanelInProject("Save Texture To Directory", "PackedTexture", "png", "Saved", texPath);
 			byte[] pngData = finalTexture.EncodeToPNG();
@@ -257,33 +281,27 @@ namespace ChannelPacker {
 		}
 
 		private void LoadSettings() {
-			try { //Get settings
-				settings = (ChannelPackerSettings)AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(AssetDatabase.FindAssets("t:ChannelPackerSettings")[0]), typeof(ChannelPackerSettings)); //Get settings
-			} catch { //If no settings file, create and assign
-				ChannelPackerSettings created = ScriptableObject.CreateInstance<ChannelPackerSettings>();
-				string path = "Assets/Plugins/ChannelPacker/ChannelPackerSettings.asset";
-				AssetDatabase.CreateAsset(created, path);
-				settings = AssetDatabase.LoadAssetAtPath<ChannelPackerSettings>(path); //CreateAsset doesn't return anything :(
-			}
+			settings = LoadFirstAsset<ChannelPackerSettings>("t:ChannelPackerSettings", new[] { "Assets" });
+			if(settings == null)
+				settings = CreateProjectAsset<ChannelPackerSettings>(UserSettingsPath);
 
 			if(preset == null) {
 				if(settings.lastPreset == null) {
-					try { //Get preset
-						preset = (ChannelPackerPreset)AssetDatabase.LoadAssetAtPath(AssetDatabase.GUIDToAssetPath(AssetDatabase.FindAssets("t:ChannelPackerPreset")[0]), typeof(ChannelPackerPreset)); //Get settings
-					} catch { //If no settings file, create and assign
-						ChannelPackerPreset created = ScriptableObject.CreateInstance<ChannelPackerPreset>();
-						string path = "Assets/Plugins/ChannelPacker/ChannelPackerDefault.asset";
-						AssetDatabase.CreateAsset(created, path);
-						preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(path); //CreateAsset doesn't return anything :(
-					}
+					preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(PackageDefaultPresetPath);
+					if(preset == null)
+						preset = LoadFirstAsset<ChannelPackerPreset>("ChannelPackerDefault t:ChannelPackerPreset");
+					if(preset == null)
+						preset = CreateProjectAsset<ChannelPackerPreset>(UserDefaultPresetPath);
 				} else {
 					preset = settings.lastPreset;
 				}
 			}
 
-			settings.lastPreset = preset;
-
-			EditorUtility.SetDirty(settings);
+			if(settings.lastPreset != preset) {
+				settings.lastPreset = preset;
+				EditorUtility.SetDirty(settings);
+				AssetDatabase.SaveAssets();
+			}
 
 			//Pull settings from preset
 			Array.Copy(preset.defaults, defaults, 4);
@@ -301,6 +319,10 @@ namespace ChannelPacker {
 		private void SavePreset() {
 			//Create new preset SO
 			string presetPath = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(preset));
+			if(string.IsNullOrEmpty(presetPath) || presetPath.StartsWith("Packages/"))
+				presetPath = UserSettingsFolder;
+			EnsureProjectFolder(UserSettingsFolder);
+
 			string path = EditorUtility.SaveFilePanelInProject("Save Preset To Directory", "Preset", "asset", "Saved", presetPath);
 
 			if(path.Length != 0) {
@@ -318,6 +340,45 @@ namespace ChannelPacker {
 
 				Debug.Log($"Preset saved to: {path}");
 				AssetDatabase.Refresh();
+			}
+		}
+
+		private void LoadPackageAssets() {
+			if(fastPack == null)
+				fastPack = AssetDatabase.LoadAssetAtPath<ComputeShader>(PackageFastPackPath);
+			if(fastPack == null)
+				fastPack = LoadFirstAsset<ComputeShader>("ChannelPacker_FastPack t:ComputeShader");
+		}
+
+		private static T LoadFirstAsset<T>(string filter, string[] searchInFolders = null) where T : UnityEngine.Object {
+			string[] guids = searchInFolders == null ? AssetDatabase.FindAssets(filter) : AssetDatabase.FindAssets(filter, searchInFolders);
+			if(guids.Length == 0)
+				return null;
+
+			string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+			return AssetDatabase.LoadAssetAtPath<T>(path);
+		}
+
+		private static T CreateProjectAsset<T>(string path) where T : ScriptableObject {
+			EnsureProjectFolder(System.IO.Path.GetDirectoryName(path).Replace("\\", "/"));
+
+			T created = ScriptableObject.CreateInstance<T>();
+			AssetDatabase.CreateAsset(created, path);
+			AssetDatabase.SaveAssets();
+			return AssetDatabase.LoadAssetAtPath<T>(path);
+		}
+
+		private static void EnsureProjectFolder(string folderPath) {
+			if(AssetDatabase.IsValidFolder(folderPath))
+				return;
+
+			string[] parts = folderPath.Split('/');
+			string current = parts[0];
+			for(int i = 1; i < parts.Length; i++) {
+				string next = current + "/" + parts[i];
+				if(!AssetDatabase.IsValidFolder(next))
+					AssetDatabase.CreateFolder(current, parts[i]);
+				current = next;
 			}
 		}
 
