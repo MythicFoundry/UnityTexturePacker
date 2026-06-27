@@ -1,7 +1,21 @@
 # ChannelPacker
 Unity Texture Combiner. Pack multiple texture color channels into one texture!
 
-Open with **Tools/ChannelPacker**
+## Installation
+
+Install through Unity Package Manager with the Git URL:
+
+```text
+https://github.com/MythicFoundry/ChannelPacker.git
+```
+
+For a pinned release, use a version tag:
+
+```text
+https://github.com/MythicFoundry/ChannelPacker.git#v1.0.0
+```
+
+Open with **Tools/Channel Packer**
 
 - Combine multiple textures into one output texture (For use in Mask maps or other packed texture techniques)
 - Choose which channel each texture pulls from, and where it goes to
