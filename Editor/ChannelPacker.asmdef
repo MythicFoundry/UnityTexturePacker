@@ -1,6 +1,6 @@
 {
     "name": "ChannelPacker",
-    "rootNamespace": "",
+    "rootNamespace": "ChannelPacker",
     "references": [],
     "includePlatforms": [
         "Editor"
