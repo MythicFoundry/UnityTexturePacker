@@ -10,19 +10,19 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8668443e18ce53c4a8f8e821c0987494, type: 3}
-  m_Name: ChannelPackerUnrealORM
+  m_Name: ChannelPackerUnrealOSM
   m_EditorClassIdentifier: 
   names:
   - Occlusion
-  - Roughness
+  - Smoothness
   - Metallic
   - Alpha
   defaults:
   - 1
-  - 1
+  - 0
   - 0
   - 1
   froms: 00000000010000000200000003000000
-  inverts: 00000000
+  inverts: 00010000
   previewShader: 
   previewMapKeyword: 
