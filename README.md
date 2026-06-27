@@ -22,6 +22,7 @@ Open with **Tools/Channel Packer**
 - Invert / multiply texture inputs for desired results
 - Have default 0 - 1 values for unassigned texture inputs
 - Save multiple presets to have different workflows in the same project
+- Includes a default channel preset and an Unreal ORM preset (`R: Occlusion`, `G: Roughness`, `B: Metallic`)
 
 ![image](https://github.com/camobiwon/ChannelPacker/assets/30759426/a8347dae-1b64-4bb1-8049-3e608bb4200b)
 ![image](https://github.com/camobiwon/ChannelPacker/assets/30759426/7ba13073-1570-49ef-b1d5-5ea3b63cdf5e)
