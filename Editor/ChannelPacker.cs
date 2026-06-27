@@ -49,6 +49,8 @@ namespace ChannelPacker {
 		private Editor previewMatViewer;
 		private Material previewMat;
 		private bool previewShaderFound;
+		private string previewMapProperty;
+		private string previewMapShaderKeyword;
 
 		//Show the window
 		[MenuItem("Tools/Channel Packer")]
@@ -146,6 +148,7 @@ namespace ChannelPacker {
 			}
 
 			GUILayout.EndVertical();
+
 			GUILayout.Space(5f);
 			GUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -310,7 +313,7 @@ namespace ChannelPacker {
 
 			//Load preview shader
 			previewMat = null;
-			Shader preview = Shader.Find(preset.previewShader);
+			Shader preview = GetPreviewShader(out previewMapProperty, out previewMapShaderKeyword);
 			if(preview != null)
 				previewMat = new Material(preview);
 			previewShaderFound = previewMat != null;
@@ -434,10 +437,76 @@ namespace ChannelPacker {
 				previewMat.SetTexture("_NormalMap", previewNormal);
 			}
 			previewMat.SetFloat("_Metallic", 1f);
-			previewMat.EnableKeyword(preset.previewMapKeyword.ToUpper());
-			previewMat.SetTexture(preset.previewMapKeyword, finalTexture);
+			if(!string.IsNullOrEmpty(previewMapShaderKeyword))
+				previewMat.EnableKeyword(previewMapShaderKeyword);
+			if(!string.IsNullOrEmpty(previewMapProperty))
+				previewMat.SetTexture(previewMapProperty, finalTexture);
 
 			previewMatViewer = Editor.CreateEditor(previewMat);
+		}
+
+		private Shader GetPreviewShader(out string mapProperty, out string shaderKeyword) {
+			mapProperty = preset.previewMapKeyword;
+			shaderKeyword = GetPreviewShaderKeyword(null, mapProperty);
+
+			if(!string.IsNullOrEmpty(preset.previewShader)) {
+				Shader configuredShader = Shader.Find(preset.previewShader);
+				if(configuredShader != null && string.IsNullOrEmpty(mapProperty))
+					GetDefaultPreviewMapSettings(configuredShader, out mapProperty, out shaderKeyword);
+				else
+					shaderKeyword = GetPreviewShaderKeyword(configuredShader, mapProperty);
+				return configuredShader;
+			}
+
+			return GetPipelineDefaultPreviewShader(out mapProperty, out shaderKeyword);
+		}
+
+		private static Shader GetPipelineDefaultPreviewShader(out string mapProperty, out string shaderKeyword) {
+			UnityEngine.Rendering.RenderPipelineAsset pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+			if(pipeline == null)
+				return GetPreviewShader("Standard", "_MetallicGlossMap", "_METALLICGLOSSMAP", out mapProperty, out shaderKeyword);
+
+			string pipelineName = pipeline.GetType().FullName;
+			if(pipelineName.Contains("Universal"))
+				return GetPreviewShader("Universal Render Pipeline/Lit", "_MetallicGlossMap", "_METALLICSPECGLOSSMAP", out mapProperty, out shaderKeyword);
+			if(pipelineName.Contains("HDRenderPipeline"))
+				return GetPreviewShader("HDRP/Lit", "_MaskMap", "_MASKMAP", out mapProperty, out shaderKeyword);
+
+			mapProperty = string.Empty;
+			shaderKeyword = string.Empty;
+			return null;
+		}
+
+		private static Shader GetPreviewShader(string shaderName, string defaultMapProperty, string defaultShaderKeyword, out string mapProperty, out string shaderKeyword) {
+			mapProperty = defaultMapProperty;
+			shaderKeyword = defaultShaderKeyword;
+			return Shader.Find(shaderName);
+		}
+
+		private static void GetDefaultPreviewMapSettings(Shader shader, out string mapProperty, out string shaderKeyword) {
+			string shaderName = shader != null ? shader.name : string.Empty;
+			if(shaderName == "Universal Render Pipeline/Lit") {
+				mapProperty = "_MetallicGlossMap";
+				shaderKeyword = "_METALLICSPECGLOSSMAP";
+				return;
+			}
+			if(shaderName == "HDRP/Lit") {
+				mapProperty = "_MaskMap";
+				shaderKeyword = "_MASKMAP";
+				return;
+			}
+
+			mapProperty = "_MetallicGlossMap";
+			shaderKeyword = "_METALLICGLOSSMAP";
+		}
+
+		private static string GetPreviewShaderKeyword(Shader shader, string mapProperty) {
+			if(string.IsNullOrEmpty(mapProperty))
+				return string.Empty;
+			if(shader != null && shader.name == "Universal Render Pipeline/Lit" && mapProperty == "_MetallicGlossMap")
+				return "_METALLICSPECGLOSSMAP";
+
+			return mapProperty.ToUpper();
 		}
 
 		public enum ColorChannel {
