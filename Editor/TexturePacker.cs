@@ -101,7 +101,7 @@ namespace MythicFoundry.TexturePacker.Editor
 
         private Vector2Int _textureDimensions = Vector2Int.zero;
 
-        private Editor? _previewMatViewer;
+        private UnityEditor.Editor? _previewMatViewer;
 
         private Material? _previewMat;
 
@@ -715,7 +715,7 @@ namespace MythicFoundry.TexturePacker.Editor
                 _previewMat.SetTexture(_previewMapProperty, _finalTexture);
             }
 
-            _previewMatViewer = Editor.CreateEditor(_previewMat);
+            _previewMatViewer = UnityEditor.Editor.CreateEditor(_previewMat);
         }
 
         private ShaderProperties GetPreviewShader()
