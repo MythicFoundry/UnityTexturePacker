@@ -12,17 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8668443e18ce53c4a8f8e821c0987494, type: 3}
   m_Name: TexturePackerUnrealOSM
   m_EditorClassIdentifier: 
-  names:
-  - Occlusion
-  - Smoothness
-  - Metallic
-  - Alpha
-  defaults:
-  - 1
-  - 0
-  - 0
-  - 1
-  froms: 00000000010000000200000003000000
-  inverts: 00010000
+  channels:
+  - name: Occlusion
+    default: 1
+    from: 0
+    invert: 0
+  - name: Smoothness
+    default: 0
+    from: 1
+    invert: 1
+  - name: Metallic
+    default: 0
+    from: 2
+    invert: 0
+  - name: Alpha
+    default: 1
+    from: 3
+    invert: 0
   previewShader: 
   previewMapKeyword: 
