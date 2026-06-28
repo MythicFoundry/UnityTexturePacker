@@ -1,6 +1,6 @@
 {
     "name": "TexturePacker",
-    "rootNamespace": "ChannelPacker",
+    "rootNamespace": "MythicFoundry.TexturePacker.Editor",
     "references": [],
     "includePlatforms": [
         "Editor"
