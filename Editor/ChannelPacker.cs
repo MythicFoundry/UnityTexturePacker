@@ -8,9 +8,10 @@ Thank you original creator! This has been extremely useful to me, and whoever is
 */
 
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Windows;
+using File = UnityEngine.Windows.File;
 
 namespace ChannelPacker
 {
@@ -30,17 +31,46 @@ namespace ChannelPacker
 
         private const string UserDefaultPresetPath = UserSettingsFolder + "/ChannelPackerDefault.asset";
 
-        //Use a compute shader to greatly speed up packing time
+        // Use a compute shader to greatly speed up packing time
         [SerializeField]
         private ComputeShader fastPack;
 
+        [SerializeField]
+        private ImageExportFormat exportFormat = ImageExportFormat.TGA;
+
         private static ChannelPacker window;
+
+        private static readonly int _baseMap = Shader.PropertyToID("_BaseMap");
+
+        private static readonly int _normalMap = Shader.PropertyToID("_NormalMap");
+
+        private static readonly int _metallic = Shader.PropertyToID("_Metallic");
+
+        private static readonly int _mults = Shader.PropertyToID("mults");
+
+        private static readonly int _inverts = Shader.PropertyToID("inverts");
+
+        private static readonly int _froms = Shader.PropertyToID("froms");
+
+        private static readonly int _a = Shader.PropertyToID("a");
+
+        private static readonly int _b = Shader.PropertyToID("b");
+
+        private static readonly int _g = Shader.PropertyToID("g");
+
+        private static readonly int _r = Shader.PropertyToID("r");
+
+        private static readonly int _result = Shader.PropertyToID("Result");
+
+        private static readonly int _packedCol = Shader.PropertyToID("packedCol");
+
+        private static readonly int _packed = Shader.PropertyToID("Packed");
 
         public ChannelPackerPreset preset;
 
         public ChannelPackerSettings settings;
 
-        //Inputs
+        // Inputs
         private Texture2D[] inputs = new Texture2D[4];
 
         public float[] defaults = new float[4];
@@ -75,7 +105,7 @@ namespace ChannelPacker
 
         private string previewMapShaderKeyword;
 
-        //Show the window
+        // Show the window
         [MenuItem("Tools/Channel Packer")]
         public static void ShowWindow()
         {
@@ -90,11 +120,13 @@ namespace ChannelPacker
             textureDimensions = Vector2Int.zero;
         }
 
-        //If for some reason the window becomes null, get it again.
+        // If for some reason the window becomes null, get it again.
         private void OnInspectorUpdate()
         {
             if (!window)
+            {
                 window = (ChannelPacker)GetWindow(typeof(ChannelPacker), false, "Channel Packer");
+            }
         }
 
         private void OnGUI()
@@ -113,13 +145,13 @@ namespace ChannelPacker
             GUILayout.Label("Channel Packer", regularStyle);
             GUILayout.Label("Add textures to be packed together", regularStyle);
 
-            //Inputs
-            ChannelInput(0); //Red
-            ChannelInput(1); //Green
-            ChannelInput(2); //Blue
-            ChannelInput(3); //Alpha
+            // Inputs
+            ChannelInput(0); // Red
+            ChannelInput(1); // Green
+            ChannelInput(2); // Blue
+            ChannelInput(3); // Alpha
 
-            //Input field for each color channel
+            // Input field for each color channel
             void ChannelInput(int channelInput)
             {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
@@ -149,7 +181,9 @@ namespace ChannelPacker
                     mults[channelInput] = EditorGUILayout.Slider($"Multiplier", mults[channelInput], 0f, 1f);
                     inverts[channelInput] = EditorGUILayout.Toggle("Invert", inverts[channelInput]);
                     if (inputs[channelInput] && inputs[channelInput].graphicsFormat.ToString().Contains("SRGB"))
+                    {
                         GUILayout.Label("Texture marked as sRGB! Disabling recommended", smallWarn);
+                    }
                 }
 
                 GUILayout.EndVertical();
@@ -157,14 +191,18 @@ namespace ChannelPacker
 
             GUILayout.Space(5f);
 
-            //Main Options
+            // Main Options
             GUILayout.BeginVertical(EditorStyles.helpBox);
-            if (fastPack == null)
+            if (!fastPack)
+            {
                 GUILayout.Label(
                     "Channel Packer compute shader was not found. Reimport the package or verify the package installation.",
                     regularWarn);
+            }
 
-            EditorGUI.BeginDisabledGroup(fastPack == null);
+            exportFormat = (ImageExportFormat)EditorGUILayout.EnumPopup("Export Format", exportFormat);
+
+            EditorGUI.BeginDisabledGroup(!fastPack);
             if (GUILayout.Button("Pack Texture") && textureDimensions != Vector2Int.zero)
             {
                 CreatePackedTexture();
@@ -199,10 +237,10 @@ namespace ChannelPacker
             GUILayout.Space(5f);
             GUILayout.BeginVertical(EditorStyles.helpBox);
 
-            //Preview
+            // Preview
             if (previewShaderFound)
             {
-                EditorGUI.BeginDisabledGroup(fastPack == null);
+                EditorGUI.BeginDisabledGroup(!fastPack);
                 if (GUILayout.Button("Update Preview") && textureDimensions != Vector2Int.zero)
                 {
                     EditorUtility.DisplayProgressBar("Packing texture", "", 0f);
@@ -217,7 +255,7 @@ namespace ChannelPacker
                 previewNormal = (Texture2D)EditorGUILayout.ObjectField("Preview Normal (Optional)", previewNormal,
                     typeof(Texture2D), false);
 
-                if (previewMat != null && previewMatViewer != null)
+                if (previewMat && previewMatViewer)
                 {
                     GUILayout.Label("Preview", regularStyle);
                     previewMatViewer.OnPreviewGUI(GUILayoutUtility.GetRect(256, 256), EditorStyles.objectField);
@@ -249,7 +287,7 @@ namespace ChannelPacker
 
         private void CreatePackedTexture()
         {
-            if (fastPack == null)
+            if (!fastPack)
             {
                 Debug.LogError("Channel Packer compute shader was not found.");
                 return;
@@ -258,12 +296,12 @@ namespace ChannelPacker
             finalTexture = new Texture2D(textureDimensions.x, textureDimensions.y, TextureFormat.ARGB32, false, true);
             int blitKernel = fastPack.FindKernel("ChannelSet");
 
-            PackTexture(0); //Red
-            PackTexture(1); //Green
-            PackTexture(2); //Blue
-            PackTexture(3); //Alpha
+            PackTexture(0); // Red
+            PackTexture(1); // Green
+            PackTexture(2); // Blue
+            PackTexture(3); // Alpha
 
-            //Prepare textures for packing
+            // Prepare textures for packing
             void PackTexture(int channelInput)
             {
                 EditorUtility.DisplayProgressBar($"Packing {preset.names[channelInput]}", "", 1f);
@@ -276,40 +314,42 @@ namespace ChannelPacker
                     blits[channelInput].enableRandomWrite = true;
                     blits[channelInput].Create();
 
-                    fastPack.SetTexture(blitKernel, "Packed", blits[channelInput]);
-                    fastPack.SetFloat("packedCol", defaults[channelInput]);
+                    fastPack.SetTexture(blitKernel, _packed, blits[channelInput]);
+                    fastPack.SetFloat(_packedCol, defaults[channelInput]);
                     fastPack.Dispatch(blitKernel, textureDimensions.x, textureDimensions.y, 1);
                 }
             }
 
             EditorUtility.DisplayProgressBar("Combining Maps", "", 1f);
-            //Create the render texture
+            // Create the render texture
             if (textureDimensions != Vector2Int.zero)
             {
-                //Setup
+                // Setup
                 packedTexture = new RenderTexture(textureDimensions.x, textureDimensions.y, 32,
-                    RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-                packedTexture.enableRandomWrite = true;
+                    RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+                {
+                    enableRandomWrite = true
+                };
                 packedTexture.Create();
 
-                //Send textures to compute shader
+                // Send textures to compute shader
                 int kernel = fastPack.FindKernel("CSMain");
-                fastPack.SetTexture(kernel, "Result", packedTexture);
-                fastPack.SetTexture(kernel, "r", blits[0]);
-                fastPack.SetTexture(kernel, "g", blits[1]);
-                fastPack.SetTexture(kernel, "b", blits[2]);
-                fastPack.SetTexture(kernel, "a", blits[3]);
+                fastPack.SetTexture(kernel, _result, packedTexture);
+                fastPack.SetTexture(kernel, _r, blits[0]);
+                fastPack.SetTexture(kernel, _g, blits[1]);
+                fastPack.SetTexture(kernel, _b, blits[2]);
+                fastPack.SetTexture(kernel, _a, blits[3]);
 
-                //Ternary hell, send data to compute shader for processing
-                fastPack.SetInts("froms", inputs[0] ? (int)froms[0] : 0, inputs[1] ? (int)froms[1] : 0,
+                // Ternary hell, send data to compute shader for processing
+                fastPack.SetInts(_froms, inputs[0] ? (int)froms[0] : 0, inputs[1] ? (int)froms[1] : 0,
                     inputs[2] ? (int)froms[2] : 0, inputs[3] ? (int)froms[3] : 0);
-                fastPack.SetInts("inverts", inputs[0] ? (inverts[0] ? 1 : 0) : 0, inputs[1] ? (inverts[1] ? 1 : 0) : 0,
+                fastPack.SetInts(_inverts, inputs[0] ? (inverts[0] ? 1 : 0) : 0, inputs[1] ? (inverts[1] ? 1 : 0) : 0,
                     inputs[2] ? (inverts[2] ? 1 : 0) : 0, inputs[3] ? (inverts[3] ? 1 : 0) : 0);
-                fastPack.SetFloats("mults", inputs[0] ? mults[0] : 1, inputs[1] ? mults[1] : 1,
+                fastPack.SetFloats(_mults, inputs[0] ? mults[0] : 1, inputs[1] ? mults[1] : 1,
                     inputs[2] ? mults[2] : 1, inputs[3] ? mults[3] : 1);
                 fastPack.Dispatch(kernel, textureDimensions.x, textureDimensions.y, 1);
 
-                //Final output
+                // Final output
                 RenderTexture previous = RenderTexture.active;
                 RenderTexture.active = packedTexture;
                 finalTexture.ReadPixels(new Rect(0, 0, packedTexture.width, packedTexture.height), 0, 0);
@@ -325,56 +365,76 @@ namespace ChannelPacker
 
         private void SaveTexture()
         {
-            //Find non-null channel input, bleh
+            // Find non-null channel input, bleh
             Texture2D validTex;
-            if (inputs[0] != null)
+            if (inputs[0])
+            {
                 validTex = inputs[0];
-            else if (inputs[1] != null)
+            }
+            else if (inputs[1])
+            {
                 validTex = inputs[1];
-            else if (inputs[2] != null)
+            }
+            else if (inputs[2])
+            {
                 validTex = inputs[2];
+            }
             else
+            {
                 validTex = inputs[3];
+            }
 
-            string texPath = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(validTex));
+            string texPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(validTex));
             if (string.IsNullOrEmpty(texPath) || texPath.StartsWith("Packages/"))
                 texPath = "Assets";
 
-            string path = EditorUtility.SaveFilePanelInProject("Save Texture To Directory", "PackedTexture", "png",
+            string extension = GetExportExtension(exportFormat);
+            string path = EditorUtility.SaveFilePanelInProject("Save Texture To Directory", "PackedTexture", extension,
                 "Saved", texPath);
-            byte[] pngData = finalTexture.EncodeToPNG();
+            byte[] imageData = EncodeTexture(finalTexture, exportFormat);
 
-            //Export to directory
-            if (path.Length != 0 && pngData != null)
+            // Export to directory
+            if (path.Length != 0 && imageData != null)
             {
-                File.WriteAllBytes(path, pngData);
+                File.WriteAllBytes(path, imageData);
                 Debug.Log($"Packed texture saved to: {path}");
                 AssetDatabase.Refresh();
 
-                //Disable sRGB
+                // Disable sRGB
                 TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
                 importer.sRGBTexture = false;
                 importer.SaveAndReimport();
             }
             else
+            {
                 EditorUtility.ClearProgressBar();
+            }
         }
 
         private void LoadSettings()
         {
             settings = LoadFirstAsset<ChannelPackerSettings>("t:ChannelPackerSettings", new[] { "Assets" });
-            if (settings == null)
-                settings = CreateProjectAsset<ChannelPackerSettings>(UserSettingsPath);
-
-            if (preset == null)
+            
+            if (!settings)
             {
-                if (settings.lastPreset == null)
+                settings = CreateProjectAsset<ChannelPackerSettings>(UserSettingsPath);
+            }
+
+            if (!preset)
+            {
+                if (!settings.lastPreset)
                 {
                     preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(PackageDefaultPresetPath);
-                    if (preset == null)
+
+                    if (!preset)
+                    {
                         preset = LoadFirstAsset<ChannelPackerPreset>("ChannelPackerDefault t:ChannelPackerPreset");
-                    if (preset == null)
+                    }
+
+                    if (!preset)
+                    {
                         preset = CreateProjectAsset<ChannelPackerPreset>(UserDefaultPresetPath);
+                    }
                 }
                 else
                 {
@@ -389,23 +449,25 @@ namespace ChannelPacker
                 AssetDatabase.SaveAssets();
             }
 
-            //Pull settings from preset
+            // Pull settings from preset
             Array.Copy(preset.defaults, defaults, 4);
             Array.Copy(preset.froms, froms, 4);
             Array.Copy(preset.inverts, inverts, 4);
 
-            //Load preview shader
+            // Load preview shader
             previewMat = null;
             Shader preview = GetPreviewShader(out previewMapProperty, out previewMapShaderKeyword);
-            if (preview != null)
+            if (preview)
+            {
                 previewMat = new Material(preview);
-            previewShaderFound = previewMat != null;
+            }
+            previewShaderFound = previewMat;
         }
 
         private void SavePreset()
         {
-            //Create new preset SO
-            string presetPath = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(preset));
+            // Create new preset SO
+            string presetPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(preset));
             if (string.IsNullOrEmpty(presetPath) || presetPath.StartsWith("Packages/"))
                 presetPath = UserSettingsFolder;
             EnsureProjectFolder(UserSettingsFolder);
@@ -416,10 +478,9 @@ namespace ChannelPacker
 
             if (path.Length != 0)
             {
-                ChannelPackerPreset
-                    created = ScriptableObject.Instantiate<ChannelPackerPreset>(preset); //Copy current preset
+                ChannelPackerPreset created = Instantiate(preset); //< Copy current preset
 
-                //Copy editable values from window
+                // Copy editable values from window
                 Array.Copy(defaults, created.defaults, 4);
                 Array.Copy(froms, created.froms, 4);
                 Array.Copy(inverts, created.inverts, 4);
@@ -437,9 +498,14 @@ namespace ChannelPacker
         private void LoadPackageAssets()
         {
             if (fastPack == null)
+            {
                 fastPack = AssetDatabase.LoadAssetAtPath<ComputeShader>(PackageFastPackPath);
+            }
+            
             if (fastPack == null)
+            {
                 fastPack = LoadFirstAsset<ComputeShader>("ChannelPacker_FastPack t:ComputeShader");
+            }
         }
 
         private static T LoadFirstAsset<T>(string filter, string[] searchInFolders = null) where T : UnityEngine.Object
@@ -456,9 +522,9 @@ namespace ChannelPacker
 
         private static T CreateProjectAsset<T>(string path) where T : ScriptableObject
         {
-            EnsureProjectFolder(System.IO.Path.GetDirectoryName(path).Replace("\\", "/"));
+            EnsureProjectFolder(Path.GetDirectoryName(path)?.Replace("\\", "/"));
 
-            T created = ScriptableObject.CreateInstance<T>();
+            T created = CreateInstance<T>();
             AssetDatabase.CreateAsset(created, path);
             AssetDatabase.SaveAssets();
             return AssetDatabase.LoadAssetAtPath<T>(path);
@@ -475,71 +541,92 @@ namespace ChannelPacker
             {
                 string next = current + "/" + parts[i];
                 if (!AssetDatabase.IsValidFolder(next))
+                {
                     AssetDatabase.CreateFolder(current, parts[i]);
+                }
                 current = next;
             }
         }
 
         private void InitGUIStyles()
         {
-            regularStyle = new GUIStyle();
-            regularStyle.fontSize = 14;
-            regularStyle.fontStyle = FontStyle.Normal;
-            regularStyle.wordWrap = true;
-            regularStyle.alignment = TextAnchor.MiddleCenter;
-            if (EditorGUIUtility.isProSkin)
-                regularStyle.normal.textColor = new Color(0.76f, 0.76f, 0.76f, 1f);
-            else
-                regularStyle.normal.textColor = Color.black;
+            regularStyle = new GUIStyle
+            {
+                fontSize = 14,
+                fontStyle = FontStyle.Normal,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleCenter,
+                normal =
+                {
+                    textColor = EditorGUIUtility.isProSkin ? new Color(0.76f, 0.76f, 0.76f, 1f) : Color.black
+                }
+            };
 
-            regularSmall = new GUIStyle();
-            regularSmall.fontSize = 12;
-            regularSmall.fontStyle = FontStyle.Normal;
-            regularSmall.wordWrap = true;
-            regularSmall.alignment = TextAnchor.MiddleCenter;
-            if (EditorGUIUtility.isProSkin)
-                regularSmall.normal.textColor = new Color(0.76f, 0.76f, 0.76f, 1f);
-            else
-                regularSmall.normal.textColor = Color.black;
+            regularSmall = new GUIStyle
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Normal,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleCenter,
+                normal =
+                {
+                    textColor = EditorGUIUtility.isProSkin ? new Color(0.76f, 0.76f, 0.76f, 1f) : Color.black
+                }
+            };
 
-            smallWarn = new GUIStyle();
-            smallWarn.fontSize = 12;
-            smallWarn.fontStyle = FontStyle.Normal;
-            smallWarn.wordWrap = true;
-            smallWarn.alignment = TextAnchor.MiddleCenter;
-            if (EditorGUIUtility.isProSkin)
-                smallWarn.normal.textColor = new Color(0.90f, 0.65f, 0.10f, 1f);
-            else
-                smallWarn.normal.textColor = new Color(0.60f, 0.35f, 0.00f, 1f);
+            smallWarn = new GUIStyle
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Normal,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleCenter,
+                normal =
+                {
+                    textColor = EditorGUIUtility.isProSkin
+                        ? new Color(0.90f, 0.65f, 0.10f, 1f)
+                        : new Color(0.60f, 0.35f, 0.00f, 1f)
+                }
+            };
 
-            regularWarn = new GUIStyle();
-            regularWarn.fontSize = 14;
-            regularWarn.fontStyle = FontStyle.Normal;
-            regularWarn.wordWrap = true;
-            regularWarn.alignment = TextAnchor.MiddleCenter;
-            if (EditorGUIUtility.isProSkin)
-                regularWarn.normal.textColor = new Color(0.90f, 0.65f, 0.10f, 1f);
-            else
-                regularWarn.normal.textColor = new Color(0.60f, 0.35f, 0.00f, 1f);
+            regularWarn = new GUIStyle
+            {
+                fontSize = 14,
+                fontStyle = FontStyle.Normal,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleCenter,
+                normal =
+                {
+                    textColor = EditorGUIUtility.isProSkin
+                        ? new Color(0.90f, 0.65f, 0.10f, 1f)
+                        : new Color(0.60f, 0.35f, 0.00f, 1f)
+                }
+            };
         }
 
         private void GeneratePreview()
         {
             if (previewAlbedo)
-                previewMat.SetTexture("_BaseMap", previewAlbedo);
+            {
+                previewMat.SetTexture(_baseMap, previewAlbedo);
+            }
 
             if (previewNormal)
             {
                 previewMat.EnableKeyword("_NORMALMAP");
                 previewMat.EnableKeyword("_NORMALMAP_TANGENT_SPACE");
-                previewMat.SetTexture("_NormalMap", previewNormal);
+                previewMat.SetTexture(_normalMap, previewNormal);
             }
 
-            previewMat.SetFloat("_Metallic", 1f);
+            previewMat.SetFloat(_metallic, 1f);
             if (!string.IsNullOrEmpty(previewMapShaderKeyword))
+            {
                 previewMat.EnableKeyword(previewMapShaderKeyword);
+            }
+            
             if (!string.IsNullOrEmpty(previewMapProperty))
+            {
                 previewMat.SetTexture(previewMapProperty, finalTexture);
+            }
 
             previewMatViewer = Editor.CreateEditor(previewMat);
         }
@@ -549,33 +636,47 @@ namespace ChannelPacker
             mapProperty = preset.previewMapKeyword;
             shaderKeyword = GetPreviewShaderKeyword(null, mapProperty);
 
-            if (!string.IsNullOrEmpty(preset.previewShader))
+            if (string.IsNullOrEmpty(preset.previewShader))
             {
-                Shader configuredShader = Shader.Find(preset.previewShader);
-                if (configuredShader != null && string.IsNullOrEmpty(mapProperty))
-                    GetDefaultPreviewMapSettings(configuredShader, out mapProperty, out shaderKeyword);
-                else
-                    shaderKeyword = GetPreviewShaderKeyword(configuredShader, mapProperty);
-                return configuredShader;
+                return GetPipelineDefaultPreviewShader(out mapProperty, out shaderKeyword);
             }
 
-            return GetPipelineDefaultPreviewShader(out mapProperty, out shaderKeyword);
+            Shader configuredShader = Shader.Find(preset.previewShader);
+                
+            if (configuredShader && string.IsNullOrEmpty(mapProperty))
+            {
+                GetDefaultPreviewMapSettings(configuredShader, out mapProperty, out shaderKeyword);
+            }
+            else
+            {
+                shaderKeyword = GetPreviewShaderKeyword(configuredShader, mapProperty);
+            }
+                
+            return configuredShader;
+
         }
 
         private static Shader GetPipelineDefaultPreviewShader(out string mapProperty, out string shaderKeyword)
         {
             UnityEngine.Rendering.RenderPipelineAsset pipeline =
                 UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
-            if (pipeline == null)
+            if (!pipeline)
+            {
                 return GetPreviewShader("Standard", "_MetallicGlossMap", "_METALLICGLOSSMAP", out mapProperty,
                     out shaderKeyword);
+            }
 
             string pipelineName = pipeline.GetType().FullName;
-            if (pipelineName.Contains("Universal"))
+            if (pipelineName?.Contains("Universal") ?? false)
+            {
                 return GetPreviewShader("Universal Render Pipeline/Lit", "_MetallicGlossMap", "_METALLICSPECGLOSSMAP",
                     out mapProperty, out shaderKeyword);
-            if (pipelineName.Contains("HDRenderPipeline"))
+            }
+            
+            if (pipelineName?.Contains("HDRenderPipeline") ?? false)
+            {
                 return GetPreviewShader("HDRP/Lit", "_MaskMap", "_MASKMAP", out mapProperty, out shaderKeyword);
+            }
 
             mapProperty = string.Empty;
             shaderKeyword = string.Empty;
@@ -593,43 +694,97 @@ namespace ChannelPacker
         private static void GetDefaultPreviewMapSettings(Shader shader, out string mapProperty,
             out string shaderKeyword)
         {
-            string shaderName = shader != null ? shader.name : string.Empty;
-            if (shaderName == "Universal Render Pipeline/Lit")
+            string shaderName = shader ? shader.name : string.Empty;
+            switch (shaderName)
             {
-                mapProperty = "_MetallicGlossMap";
-                shaderKeyword = "_METALLICSPECGLOSSMAP";
-                return;
+                case "Universal Render Pipeline/Lit":
+                {
+                    mapProperty = "_MetallicGlossMap";
+                    shaderKeyword = "_METALLICSPECGLOSSMAP";
+                    return;
+                }
+                case "HDRP/Lit":
+                {
+                    mapProperty = "_MaskMap";
+                    shaderKeyword = "_MASKMAP";
+                    return;
+                }
+                default:
+                {
+                    mapProperty = "_MetallicGlossMap";
+                    shaderKeyword = "_METALLICGLOSSMAP";
+                    break;
+                }
             }
-
-            if (shaderName == "HDRP/Lit")
-            {
-                mapProperty = "_MaskMap";
-                shaderKeyword = "_MASKMAP";
-                return;
-            }
-
-            mapProperty = "_MetallicGlossMap";
-            shaderKeyword = "_METALLICGLOSSMAP";
         }
 
         private static string GetPreviewShaderKeyword(Shader shader, string mapProperty)
         {
             if (string.IsNullOrEmpty(mapProperty))
+            {
                 return string.Empty;
-            if (shader != null && shader.name == "Universal Render Pipeline/Lit" && mapProperty == "_MetallicGlossMap")
+            }
+            
+            if (shader && shader.name == "Universal Render Pipeline/Lit" && mapProperty == "_MetallicGlossMap")
+            {
                 return "_METALLICSPECGLOSSMAP";
+            }
 
             return mapProperty.ToUpper();
+        }
+
+        private static byte[] EncodeTexture(Texture2D texture, ImageExportFormat format)
+        {
+            switch (format)
+            {
+                case ImageExportFormat.JPG:
+                {
+                    return texture.EncodeToJPG(100);
+                }
+                case ImageExportFormat.PNG:
+                {
+                    return texture.EncodeToPNG();
+                }
+                case ImageExportFormat.TGA:
+                default:
+                {
+                    return texture.EncodeToTGA();
+                }
+            }
+        }
+
+        private static string GetExportExtension(ImageExportFormat format)
+        {
+            switch (format)
+            {
+                case ImageExportFormat.JPG:
+                {
+                    return "jpg";
+                }
+                case ImageExportFormat.PNG:
+                {
+                    return "png";
+                }
+                case ImageExportFormat.TGA:
+                default:
+                {
+                    return "tga";
+                }
+            }
+        }
+
+        public enum ImageExportFormat
+        {
+            TGA,
+            PNG,
+            JPG
         }
 
         public enum ColorChannel
         {
             R,
-
             G,
-
             B,
-
             A
         }
     }
