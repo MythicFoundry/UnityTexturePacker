@@ -1,7 +1,7 @@
 {
-  "name": "com.mythicfoundry.channel-packer",
+  "name": "com.mythicfoundry.texture-packer",
   "version": "1.0.1",
-  "displayName": "Channel Packer",
+  "displayName": "Texture Packer",
   "description": "Editor tool for packing multiple texture color channels into one output texture.",
   "unity": "6000.0",
   "license": "MIT",

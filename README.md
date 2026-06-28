@@ -15,7 +15,7 @@ For a pinned release, use a version tag:
 https://github.com/MythicFoundry/TexturePacker.git#v1.0.0
 ```
 
-Open with **Tools/Channel Packer**
+Open with **Tools/Texture Packer**
 
 - Combine multiple textures into one output texture (For use in Mask maps or other packed texture techniques)
 - Choose which channel each texture pulls from, and where it goes to

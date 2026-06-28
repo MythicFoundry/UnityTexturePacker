@@ -2,9 +2,11 @@
 
 #if UNITY_EDITOR
 /*
-Channel Packer
-Made by Camobiwon
+Texture Packer
+Made by Mythic Foundry
+Original project by Camobiwon
 
+Note from Camobiwon:
 Original code from: https://www.reddit.com/r/Unity3D/comments/glkvp2/i_made_another_mask_map_packer_for_hdrp/
 Thank you original creator! This has been extremely useful to me, and whoever is using this, I hope Channel Packer is useful to you :)
 */
@@ -19,7 +21,7 @@ namespace MythicFoundry.TexturePacker.Editor
 {
     public class TexturePacker : EditorWindow
     {
-        private const string PackageName = "com.mythicfoundry.channel-packer";
+        private const string PackageName = "com.mythicfoundry.texture-packer";
 
         private const string PackageRoot = "Packages/" + PackageName;
 
@@ -112,10 +114,10 @@ namespace MythicFoundry.TexturePacker.Editor
         private string _previewMapShaderKeyword = string.Empty;
 
         // Show the window
-        [MenuItem("Tools/Channel Packer")]
+        [MenuItem("Tools/Texture Packer")]
         public static void ShowWindow()
         {
-            _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Channel Packer");
+            _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Texture Packer");
         }
 
         private void OnEnable()
@@ -131,7 +133,7 @@ namespace MythicFoundry.TexturePacker.Editor
         {
             if (!_window)
             {
-                _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Channel Packer");
+                _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Texture Packer");
             }
         }
 
@@ -158,7 +160,7 @@ namespace MythicFoundry.TexturePacker.Editor
                 _textureDimensions = Vector2Int.zero;
             }
 
-            GUILayout.Label("Channel Packer", _regularStyle);
+            GUILayout.Label("Texture Packer", _regularStyle);
             GUILayout.Label("Add textures to be packed together", _regularStyle);
 
             // Inputs
@@ -174,7 +176,7 @@ namespace MythicFoundry.TexturePacker.Editor
             if (!fastPack)
             {
                 GUILayout.Label(
-                    "Channel Packer compute shader was not found. Reimport the package or verify the package installation.",
+                    "Texture Packer compute shader was not found. Reimport the package or verify the package installation.",
                     _regularWarn);
             }
 
@@ -314,7 +316,7 @@ namespace MythicFoundry.TexturePacker.Editor
         {
             if (!fastPack)
             {
-                Debug.LogError("Channel Packer compute shader was not found.");
+                Debug.LogError("Texture Packer compute shader was not found.");
                 return;
             }
 
@@ -354,7 +356,7 @@ namespace MythicFoundry.TexturePacker.Editor
         {
             if (!fastPack)
             {
-                Debug.LogError("Channel Packer compute shader was not found.");
+                Debug.LogError("Texture Packer compute shader was not found.");
                 return;
             }
 
