@@ -15,23 +15,23 @@ using UnityEditor;
 using UnityEngine;
 using File = UnityEngine.Windows.File;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
-    public class ChannelPacker : EditorWindow
+    public class TexturePacker : EditorWindow
     {
         private const string PackageName = "com.mythicfoundry.channel-packer";
 
         private const string PackageRoot = "Packages/" + PackageName;
 
-        private const string PackageDefaultPresetPath = PackageRoot + "/ChannelPackerDefault.asset";
+        private const string PackageDefaultPresetPath = PackageRoot + "/TexturePackerDefault.asset";
 
-        private const string PackageFastPackPath = PackageRoot + "/Editor/ChannelPacker_FastPack.compute";
+        private const string PackageFastPackPath = PackageRoot + "/Editor/TexturePacker_FastPack.compute";
 
-        private const string UserSettingsFolder = "Assets/ChannelPacker";
+        private const string UserSettingsFolder = "Assets/TexturePacker";
 
-        private const string LegacyUserSettingsPath = UserSettingsFolder + "/ChannelPackerSettings.asset";
+        private const string LegacyUserSettingsPath = UserSettingsFolder + "/TexturePackerSettings.asset";
 
-        private const string UserDefaultPresetPath = UserSettingsFolder + "/ChannelPackerDefault.asset";
+        private const string UserDefaultPresetPath = UserSettingsFolder + "/TexturePackerDefault.asset";
 
         // Use a compute shader to greatly speed up packing time
         [SerializeField]
@@ -40,7 +40,7 @@ namespace ChannelPacker
         [SerializeField]
         private ImageExportFormat exportFormat = ImageExportFormat.TGA;
 
-        private static ChannelPacker? _window;
+        private static TexturePacker? _window;
 
         private static readonly int _baseMap = Shader.PropertyToID("_BaseMap");
 
@@ -68,9 +68,9 @@ namespace ChannelPacker
 
         private static readonly int _packed = Shader.PropertyToID("Packed");
 
-        public ChannelPackerPreset? preset;
+        public TexturePackerPreset? preset;
 
-        public ChannelPackerSettings? settings;
+        public TexturePackerSettings? settings;
 
         // Inputs
         private readonly TextureChannel[] _channels =
@@ -115,7 +115,7 @@ namespace ChannelPacker
         [MenuItem("Tools/Channel Packer")]
         public static void ShowWindow()
         {
-            _window = (ChannelPacker)GetWindow(typeof(ChannelPacker), false, "Channel Packer");
+            _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Channel Packer");
         }
 
         private void OnEnable()
@@ -131,7 +131,7 @@ namespace ChannelPacker
         {
             if (!_window)
             {
-                _window = (ChannelPacker)GetWindow(typeof(ChannelPacker), false, "Channel Packer");
+                _window = (TexturePacker)GetWindow(typeof(TexturePacker), false, "Channel Packer");
             }
         }
 
@@ -204,8 +204,8 @@ namespace ChannelPacker
             }
 
             EditorGUI.BeginChangeCheck();
-            preset = (ChannelPackerPreset)EditorGUILayout.ObjectField(
-                new GUIContent("Preset", "The preset packing settings to be used"), preset, typeof(ChannelPackerPreset),
+            preset = (TexturePackerPreset)EditorGUILayout.ObjectField(
+                new GUIContent("Preset", "The preset packing settings to be used"), preset, typeof(TexturePackerPreset),
                 preset);
             if (EditorGUI.EndChangeCheck())
             {
@@ -462,7 +462,7 @@ namespace ChannelPacker
 
         private void LoadSettings()
         {
-            ChannelPackerSettings currentSettings = ChannelPackerSettings.instance;
+            TexturePackerSettings currentSettings = TexturePackerSettings.instance;
             settings = currentSettings;
             MigrateLegacySettings(currentSettings);
 
@@ -470,16 +470,16 @@ namespace ChannelPacker
             {
                 if (!currentSettings.lastPreset)
                 {
-                    preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(PackageDefaultPresetPath);
+                    preset = AssetDatabase.LoadAssetAtPath<TexturePackerPreset>(PackageDefaultPresetPath);
 
                     if (!preset)
                     {
-                        preset = LoadFirstAsset<ChannelPackerPreset>("ChannelPackerDefault t:ChannelPackerPreset");
+                        preset = LoadFirstAsset<TexturePackerPreset>("TexturePackerDefault t:TexturePackerPreset");
                     }
 
                     if (!preset)
                     {
-                        preset = CreateProjectAsset<ChannelPackerPreset>(UserDefaultPresetPath);
+                        preset = CreateProjectAsset<TexturePackerPreset>(UserDefaultPresetPath);
                     }
                 }
                 else
@@ -498,11 +498,11 @@ namespace ChannelPacker
             for (int index = 0; index < _channels.Length; index++)
             {
                 TextureChannel textureChannel = _channels[index];
-                ChannelPackerChannel channelPackerChannel = preset.channels[index];
+                TexturePackerChannel texturePackerChannel = preset.channels[index];
                 
-                textureChannel.@default = channelPackerChannel.@default;
-                textureChannel.from = channelPackerChannel.from;
-                textureChannel.invert = channelPackerChannel.invert;
+                textureChannel.@default = texturePackerChannel.@default;
+                textureChannel.from = texturePackerChannel.from;
+                textureChannel.invert = texturePackerChannel.invert;
             }
 
             // Load preview shader
@@ -518,13 +518,13 @@ namespace ChannelPacker
             _previewShaderFound = _previewMat;
         }
 
-        private static void MigrateLegacySettings(ChannelPackerSettings settings)
+        private static void MigrateLegacySettings(TexturePackerSettings settings)
         {
             if (settings.lastPreset)
                 return;
 
-            ChannelPackerSettings? legacySettings =
-                AssetDatabase.LoadAssetAtPath<ChannelPackerSettings>(LegacyUserSettingsPath);
+            TexturePackerSettings? legacySettings =
+                AssetDatabase.LoadAssetAtPath<TexturePackerSettings>(LegacyUserSettingsPath);
             if (!legacySettings || !legacySettings.lastPreset)
                 return;
 
@@ -547,7 +547,7 @@ namespace ChannelPacker
             if (path.Length == 0)
                 return;
 
-            ChannelPackerPreset? created = Instantiate(preset); //< Copy current preset
+            TexturePackerPreset? created = Instantiate(preset); //< Copy current preset
             if (!created)
             {
                 Debug.LogError($"Failed to instantiate preset {preset?.name}");
@@ -558,15 +558,15 @@ namespace ChannelPacker
             for (int index = 0; index < _channels.Length; index++)
             {
                 TextureChannel textureChannel = _channels[index];
-                ChannelPackerChannel channelPackerChannel = created.channels[index];
+                TexturePackerChannel texturePackerChannel = created.channels[index];
 
-                channelPackerChannel.@default = textureChannel.@default;
-                channelPackerChannel.from = textureChannel.from;
-                channelPackerChannel.invert = textureChannel.invert;
+                texturePackerChannel.@default = textureChannel.@default;
+                texturePackerChannel.from = textureChannel.from;
+                texturePackerChannel.invert = textureChannel.invert;
             }
 
             AssetDatabase.CreateAsset(created, path);
-            preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(path);
+            preset = AssetDatabase.LoadAssetAtPath<TexturePackerPreset>(path);
 
             EditorUtility.SetDirty(preset);
 
@@ -583,7 +583,7 @@ namespace ChannelPacker
 
             if (fastPack == null)
             {
-                fastPack = LoadFirstAsset<ComputeShader>("ChannelPacker_FastPack t:ComputeShader");
+                fastPack = LoadFirstAsset<ComputeShader>("TexturePacker_FastPack t:ComputeShader");
             }
         }
 

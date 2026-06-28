@@ -2,7 +2,7 @@
 
 using UnityEngine;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
     internal static class ShaderExtensions
     {

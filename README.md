@@ -1,4 +1,4 @@
-# ChannelPacker
+# TexturePacker
 Unity Texture Combiner. Pack multiple texture color channels into one texture!
 
 ## Installation
@@ -6,13 +6,13 @@ Unity Texture Combiner. Pack multiple texture color channels into one texture!
 Install through Unity Package Manager with the Git URL:
 
 ```text
-https://github.com/MythicFoundry/ChannelPacker.git
+https://github.com/MythicFoundry/TexturePacker.git
 ```
 
 For a pinned release, use a version tag:
 
 ```text
-https://github.com/MythicFoundry/ChannelPacker.git#v1.0.0
+https://github.com/MythicFoundry/TexturePacker.git#v1.0.0
 ```
 
 Open with **Tools/Channel Packer**
@@ -29,7 +29,7 @@ Open with **Tools/Channel Packer**
 
 ![All](https://github.com/camobiwon/ChannelPacker/assets/30759426/598f2ec7-9f20-4430-9742-eae82359be97)
 
-ChannelPacker is a heavily modified / rewritten version of [MaskPacker](https://www.reddit.com/r/Unity3D/comments/glkvp2/i_made_another_mask_map_packer_for_hdrp/).
+TexturePacker is a heavily modified / rewritten version of [MaskPacker](https://www.reddit.com/r/Unity3D/comments/glkvp2/i_made_another_mask_map_packer_for_hdrp/).
 
 Mask Packer was built for HDRP masks only, so I made this to be modular, flexible, and support many more workflows, while fixing some quirks / bugs I had with the original.
 

@@ -3,7 +3,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
     internal readonly struct ShaderProperties
     {

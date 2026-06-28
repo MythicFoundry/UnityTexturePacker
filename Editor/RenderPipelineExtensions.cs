@@ -2,7 +2,7 @@
 
 using UnityEngine.Rendering;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
     internal static class RenderPipelineAssetExtensions
     {

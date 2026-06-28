@@ -3,22 +3,22 @@
 #if UNITY_EDITOR
 using System;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
     [Serializable]
-    public class ChannelPackerChannel
+    public class TexturePackerChannel
     {
         public string name = string.Empty;
         
         public float @default = 1;
         
-        public ChannelPacker.ColorChannel from;
+        public TexturePacker.ColorChannel from;
         
         public bool invert;
 
-        public static ChannelPackerChannel FromChannel(TextureChannel channel)
+        public static TexturePackerChannel FromChannel(TextureChannel channel)
         {
-            return new ChannelPackerChannel
+            return new TexturePackerChannel
             {
                 @default = channel.@default,
                 from = channel.from,

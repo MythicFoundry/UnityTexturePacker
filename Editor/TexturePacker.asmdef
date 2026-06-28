@@ -1,5 +1,5 @@
 {
-    "name": "ChannelPacker",
+    "name": "TexturePacker",
     "rootNamespace": "ChannelPacker",
     "references": [],
     "includePlatforms": [

@@ -4,7 +4,7 @@
 
 using UnityEngine;
 
-namespace ChannelPacker
+namespace MythicFoundry.TexturePacker.Editor
 {
     public class TextureChannel
     {
@@ -14,13 +14,13 @@ namespace ChannelPacker
 
         public float mult = 1;
 
-        public ChannelPacker.ColorChannel from;
+        public TexturePacker.ColorChannel from;
 
         public bool invert;
 
         public RenderTexture? blit;
 
-        public static TextureChannel FromChannel(ChannelPackerChannel channel)
+        public static TextureChannel FromChannel(TexturePackerChannel channel)
         {
             return new TextureChannel
             {
