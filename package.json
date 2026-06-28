@@ -1,6 +1,6 @@
 {
   "name": "com.mythicfoundry.channel-packer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Channel Packer",
   "description": "Editor tool for packing multiple texture color channels into one output texture.",
   "unity": "6000.0",
@@ -12,11 +12,11 @@
     "editor"
   ],
   "author": {
-    "name": "Camobiwon",
-    "url": "https://github.com/camobiwon"
+    "name": "Mythic Foundry",
+    "url": "https://github.com/MythicFoundry"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MythicFoundry/ChannelPacker.git"
+    "url": "https://github.com/MythicFoundry/UnityTexturePacker.git"
   }
 }
