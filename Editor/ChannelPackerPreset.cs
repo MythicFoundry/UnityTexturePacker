@@ -1,21 +1,42 @@
 #if UNITY_EDITOR
+#if ODIN_INSPECTOR
+using Sirenix.OdinInspector;
+#endif
 using UnityEngine;
 
 namespace ChannelPacker
 {
-	public class ChannelPackerPreset : ScriptableObject
-	{
-		public string[] names = new string[4] { "Red", "Green", "Blue", "Alpha" };
-		
-		public float[] defaults = new float[4];
-		
-		public ChannelPacker.ColorChannel[] froms = new ChannelPacker.ColorChannel[4];
-		
-		public bool[] inverts = new bool[4];
+    public class ChannelPackerPreset : ScriptableObject
+    {
+        #if ODIN_INSPECTOR
+        [ListDrawerSettings(ListElementLabelName = nameof(name))]
+        #endif
+        [SerializeField]
+        public ChannelPackerChannel[] channels =
+        {
+            new() { name = "Red" },
+            new() { name = "Green" },
+            new() { name = "Blue" },
+            new() { name = "Alpha" }
+        };
 
-		public string previewShader;
-		
-		public string previewMapKeyword;
-	}
+        #if ODIN_INSPECTOR
+        [TitleGroup("Preview")]
+        #endif
+        [SerializeField]
+        public string previewShader;
+
+        #if ODIN_INSPECTOR
+        [TitleGroup("Preview")]
+        #endif
+        [SerializeField]
+        public string previewMapKeyword;
+        
+        public ChannelPackerChannel this[int index]
+        {
+            get => channels[index];
+            set => channels[index] = value;
+        }
+    }
 }
 #endif

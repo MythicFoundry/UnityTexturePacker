@@ -9,7 +9,6 @@ Original code from: https://www.reddit.com/r/Unity3D/comments/glkvp2/i_made_anot
 Thank you original creator! This has been extremely useful to me, and whoever is using this, I hope Channel Packer is useful to you :)
 */
 
-using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -30,7 +29,7 @@ namespace ChannelPacker
 
         private const string UserSettingsFolder = "Assets/ChannelPacker";
 
-        private const string UserSettingsPath = UserSettingsFolder + "/ChannelPackerSettings.asset";
+        private const string LegacyUserSettingsPath = UserSettingsFolder + "/ChannelPackerSettings.asset";
 
         private const string UserDefaultPresetPath = UserSettingsFolder + "/ChannelPackerDefault.asset";
 
@@ -74,21 +73,17 @@ namespace ChannelPacker
         public ChannelPackerSettings? settings;
 
         // Inputs
-        private readonly Texture2D?[] _inputs = new Texture2D[4];
-
-        public float[] defaults = new float[4];
-
-        public float[] mults = { 1, 1, 1, 1 };
-
-        public ColorChannel[] froms = new ColorChannel[4];
-
-        public bool[] inverts = new bool[4];
+        private readonly TextureChannel[] _channels =
+        {
+            new(),
+            new(),
+            new(),
+            new()
+        };
 
         private Texture2D? _previewAlbedo;
 
         private Texture2D? _previewNormal;
-
-        private readonly RenderTexture[] _blits = new RenderTexture[4];
 
         private Vector2 _scrollPos;
 
@@ -140,6 +135,14 @@ namespace ChannelPacker
             }
         }
 
+        private void ClearInputs()
+        {
+            _channels[0].input = null;
+            _channels[1].input = null;
+            _channels[2].input = null;
+            _channels[3].input = null;
+        }
+
         private void OnGUI()
         {
             if (_window)
@@ -150,7 +153,7 @@ namespace ChannelPacker
                 _scrollPos = GUILayout.BeginScrollView(_scrollPos, false, true, GUILayout.ExpandHeight(true));
             }
 
-            if (!_inputs[0] && !_inputs[1] && !_inputs[2] && !_inputs[3])
+            if (!_channels[0].input && !_channels[1].input && !_channels[2].input && !_channels[3].input)
             {
                 _textureDimensions = Vector2Int.zero;
             }
@@ -189,10 +192,7 @@ namespace ChannelPacker
 
             if (GUILayout.Button("Clear All"))
             {
-                _inputs[0] = null;
-                _inputs[1] = null;
-                _inputs[2] = null;
-                _inputs[3] = null;
+                ClearInputs();
                 _previewAlbedo = null;
                 _previewNormal = null;
                 _previewMatViewer = null;
@@ -269,43 +269,85 @@ namespace ChannelPacker
             // Input field for each color channel
             void _ChannelInput(int channelInput)
             {
+                TextureChannel channel = _channels[channelInput];
+                
                 GUILayout.BeginVertical(EditorStyles.helpBox);
-                _inputs[channelInput] = (Texture2D)EditorGUILayout.ObjectField($"{preset?.names[channelInput]} Input",
-                    _inputs[channelInput], typeof(Texture2D), false);
+                channel.input = (Texture2D)EditorGUILayout.ObjectField($"{preset?[channelInput].name} Input",
+                    channel.input, typeof(Texture2D), false);
 
-                Texture2D? textureInput = _inputs[channelInput];
+                Texture2D? textureInput = channel.input;
                 if (!textureInput)
                 {
-                    GUILayout.Label($"No {preset?.names[channelInput]} Input, use slider to set value", _regularSmall);
-                    defaults[channelInput] = EditorGUILayout.Slider(defaults[channelInput], 0f, 1f);
+                    GUILayout.Label($"No {preset?[channelInput].name} Input, use slider to set value", _regularSmall);
+                    channel.@default = EditorGUILayout.Slider(channel.@default, 0f, 1f);
+                    GUILayout.EndVertical();
+                    return;
                 }
-                else
+
+                if (_textureDimensions != Vector2Int.zero && (textureInput.width != _textureDimensions.x ||
+                                                              textureInput.height != _textureDimensions.y))
                 {
-                    if (_textureDimensions != Vector2Int.zero && (textureInput.width != _textureDimensions.x ||
-                                                                  textureInput.height != _textureDimensions.y))
-                    {
-                        _inputs[channelInput] = null;
-                        Debug.LogWarning("Input texture is not the same resolution as other textures! Rejecting");
-                    }
+                    channel.input = null;
+                    Debug.LogWarning("Input texture is not the same resolution as other textures! Rejecting");
+                }
 
-                    if (_textureDimensions == Vector2Int.zero)
-                    {
-                        _textureDimensions = textureInput
-                            ? new Vector2Int(textureInput.width, textureInput.height)
-                            : Vector2Int.zero;
-                    }
+                if (_textureDimensions == Vector2Int.zero)
+                {
+                    _textureDimensions = textureInput
+                        ? new Vector2Int(textureInput.width, textureInput.height)
+                        : Vector2Int.zero;
+                }
 
-                    froms[channelInput] = (ColorChannel)EditorGUILayout.EnumPopup("From Channel", froms[channelInput]);
-                    mults[channelInput] = EditorGUILayout.Slider($"Multiplier", mults[channelInput], 0f, 1f);
-                    inverts[channelInput] = EditorGUILayout.Toggle("Invert", inverts[channelInput]);
-                    if (textureInput && textureInput.graphicsFormat.ToString().Contains("SRGB"))
-                    {
-                        GUILayout.Label("Texture marked as sRGB! Disabling recommended", _smallWarn);
-                    }
+                channel.from = (ColorChannel)EditorGUILayout.EnumPopup("From Channel", channel.from);
+                channel.mult = EditorGUILayout.Slider("Multiplier", channel.mult, 0f, 1f);
+                channel.invert = EditorGUILayout.Toggle("Invert", channel.invert);
+                if (textureInput && textureInput.graphicsFormat.ToString().Contains("SRGB"))
+                {
+                    GUILayout.Label("Texture marked as sRGB! Disabling recommended", _smallWarn);
                 }
 
                 GUILayout.EndVertical();
             }
+        }
+
+        private void SetChannelValues()
+        {
+            if (!fastPack)
+            {
+                Debug.LogError("Channel Packer compute shader was not found.");
+                return;
+            }
+
+            TextureChannel rChannel = _channels[0];
+            TextureChannel gChannel = _channels[1];
+            TextureChannel bChannel = _channels[2];
+            TextureChannel aChannel = _channels[3];
+            
+            // Send textures to compute shader
+            int kernel = fastPack.FindKernel("CSMain");
+            fastPack.SetTexture(kernel, _result, _packedTexture);
+            fastPack.SetTexture(kernel, _r, rChannel.blit);
+            fastPack.SetTexture(kernel, _g, gChannel.blit);
+            fastPack.SetTexture(kernel, _b, bChannel.blit);
+            fastPack.SetTexture(kernel, _a, aChannel.blit);
+
+            // Ternary hell, send data to compute shader for processing
+            fastPack.SetInts(_froms,
+                rChannel.input ? (int)rChannel.from : 0,
+                gChannel.input ? (int)gChannel.from : 0,
+                bChannel.input ? (int)bChannel.from : 0,
+                aChannel.input ? (int)aChannel.from : 0);
+            fastPack.SetInts(_inverts,
+                rChannel.input ? (rChannel.invert ? 1 : 0) : 0,
+                gChannel.input ? (gChannel.invert ? 1 : 0) : 0,
+                bChannel.input ? (bChannel.invert ? 1 : 0) : 0,
+                aChannel.input ? (aChannel.invert ? 1 : 0) : 0);
+            fastPack.SetFloats(_mults,
+                rChannel.input ? rChannel.mult : 1,
+                gChannel.input ? gChannel.mult : 1,
+                bChannel.input ? bChannel.mult : 1,
+                aChannel.input ? aChannel.mult : 1);
+            fastPack.Dispatch(kernel, _textureDimensions.x, _textureDimensions.y, 1);
         }
 
         private void CreatePackedTexture()
@@ -337,31 +379,7 @@ namespace ChannelPacker
                 };
                 _packedTexture.Create();
 
-                // Send textures to compute shader
-                int kernel = fastPack.FindKernel("CSMain");
-                fastPack.SetTexture(kernel, _result, _packedTexture);
-                fastPack.SetTexture(kernel, _r, _blits[0]);
-                fastPack.SetTexture(kernel, _g, _blits[1]);
-                fastPack.SetTexture(kernel, _b, _blits[2]);
-                fastPack.SetTexture(kernel, _a, _blits[3]);
-
-                // Ternary hell, send data to compute shader for processing
-                fastPack.SetInts(_froms,
-                    _inputs[0] ? (int)froms[0] : 0,
-                    _inputs[1] ? (int)froms[1] : 0,
-                    _inputs[2] ? (int)froms[2] : 0,
-                    _inputs[3] ? (int)froms[3] : 0);
-                fastPack.SetInts(_inverts,
-                    _inputs[0] ? (inverts[0] ? 1 : 0) : 0,
-                    _inputs[1] ? (inverts[1] ? 1 : 0) : 0,
-                    _inputs[2] ? (inverts[2] ? 1 : 0) : 0,
-                    _inputs[3] ? (inverts[3] ? 1 : 0) : 0);
-                fastPack.SetFloats(_mults,
-                    _inputs[0] ? mults[0] : 1,
-                    _inputs[1] ? mults[1] : 1,
-                    _inputs[2] ? mults[2] : 1,
-                    _inputs[3] ? mults[3] : 1);
-                fastPack.Dispatch(kernel, _textureDimensions.x, _textureDimensions.y, 1);
+                SetChannelValues();
 
                 // Final output
                 RenderTexture previous = RenderTexture.active;
@@ -381,28 +399,31 @@ namespace ChannelPacker
             // Prepare textures for packing
             void _PackTexture(int channelInput)
             {
-                EditorUtility.DisplayProgressBar($"Packing {preset?.names[channelInput]}", string.Empty, 1f);
-                _blits[channelInput] = new RenderTexture(_textureDimensions.x, _textureDimensions.y, 0,
+                TextureChannel channel = _channels[channelInput];
+                
+                EditorUtility.DisplayProgressBar($"Packing {preset?[channelInput].name}", string.Empty, 1f);
+                
+                channel.blit = new RenderTexture(_textureDimensions.x, _textureDimensions.y, 0,
                     RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-                if (_inputs[channelInput])
+                
+                if (channel.input)
                 {
-                    Graphics.Blit(_inputs[channelInput], _blits[channelInput]);
+                    Graphics.Blit(channel.input, channel.blit);
+                    return;
                 }
-                else
-                {
-                    _blits[channelInput].enableRandomWrite = true;
-                    _blits[channelInput].Create();
 
-                    fastPack.SetTexture(blitKernel, _packed, _blits[channelInput]);
-                    fastPack.SetFloat(_packedCol, defaults[channelInput]);
-                    fastPack.Dispatch(blitKernel, _textureDimensions.x, _textureDimensions.y, 1);
-                }
+                channel.blit.enableRandomWrite = true;
+                channel.blit.Create();
+
+                fastPack.SetTexture(blitKernel, _packed, channel.blit);
+                fastPack.SetFloat(_packedCol, channel.@default);
+                fastPack.Dispatch(blitKernel, _textureDimensions.x, _textureDimensions.y, 1);
             }
         }
 
         private Texture2D? GetFirstValidTexture()
         {
-            return _inputs.First(input => input);
+            return _channels.FirstOrDefault(channel => channel.input)?.input;
         }
 
         private void SaveTexture()
@@ -441,16 +462,13 @@ namespace ChannelPacker
 
         private void LoadSettings()
         {
-            settings = LoadFirstAsset<ChannelPackerSettings>("t:ChannelPackerSettings", new[] { "Assets" });
-
-            if (!settings)
-            {
-                settings = CreateProjectAsset<ChannelPackerSettings>(UserSettingsPath);
-            }
+            ChannelPackerSettings currentSettings = ChannelPackerSettings.instance;
+            settings = currentSettings;
+            MigrateLegacySettings(currentSettings);
 
             if (!preset)
             {
-                if (!settings.lastPreset)
+                if (!currentSettings.lastPreset)
                 {
                     preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(PackageDefaultPresetPath);
 
@@ -466,21 +484,26 @@ namespace ChannelPacker
                 }
                 else
                 {
-                    preset = settings.lastPreset;
+                    preset = currentSettings.lastPreset;
                 }
             }
 
-            if (settings.lastPreset != preset)
+            if (currentSettings.lastPreset != preset)
             {
-                settings.lastPreset = preset;
-                EditorUtility.SetDirty(settings);
-                AssetDatabase.SaveAssets();
+                currentSettings.lastPreset = preset;
+                currentSettings.SaveSettings();
             }
 
             // Pull settings from preset
-            Array.Copy(preset.defaults, defaults, 4);
-            Array.Copy(preset.froms, froms, 4);
-            Array.Copy(preset.inverts, inverts, 4);
+            for (int index = 0; index < _channels.Length; index++)
+            {
+                TextureChannel textureChannel = _channels[index];
+                ChannelPackerChannel channelPackerChannel = preset.channels[index];
+                
+                textureChannel.@default = channelPackerChannel.@default;
+                textureChannel.from = channelPackerChannel.from;
+                textureChannel.invert = channelPackerChannel.invert;
+            }
 
             // Load preview shader
             _previewMat = null;
@@ -493,6 +516,20 @@ namespace ChannelPacker
             _previewMapProperty = previewProperties.MapProperty;
             _previewMapShaderKeyword = previewProperties.ShaderKeyword;
             _previewShaderFound = _previewMat;
+        }
+
+        private static void MigrateLegacySettings(ChannelPackerSettings settings)
+        {
+            if (settings.lastPreset)
+                return;
+
+            ChannelPackerSettings? legacySettings =
+                AssetDatabase.LoadAssetAtPath<ChannelPackerSettings>(LegacyUserSettingsPath);
+            if (!legacySettings || !legacySettings.lastPreset)
+                return;
+
+            settings.lastPreset = legacySettings.lastPreset;
+            settings.SaveSettings();
         }
 
         private void SavePreset()
@@ -518,9 +555,15 @@ namespace ChannelPacker
             }
 
             // Copy editable values from window
-            Array.Copy(defaults, created.defaults, 4);
-            Array.Copy(froms, created.froms, 4);
-            Array.Copy(inverts, created.inverts, 4);
+            for (int index = 0; index < _channels.Length; index++)
+            {
+                TextureChannel textureChannel = _channels[index];
+                ChannelPackerChannel channelPackerChannel = created.channels[index];
+
+                channelPackerChannel.@default = textureChannel.@default;
+                channelPackerChannel.from = textureChannel.from;
+                channelPackerChannel.invert = textureChannel.invert;
+            }
 
             AssetDatabase.CreateAsset(created, path);
             preset = AssetDatabase.LoadAssetAtPath<ChannelPackerPreset>(path);
