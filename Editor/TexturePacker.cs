@@ -25,7 +25,7 @@ namespace MythicFoundry.TexturePacker.Editor
 
         private const string PackageRoot = "Packages/" + PackageName;
 
-        private const string PackageDefaultPresetPath = PackageRoot + "/TexturePackerDefault.asset";
+        private const string PackageDefaultPresetPath = PackageRoot + "/Presets/TexturePacker_Default.asset";
 
         private const string PackageFastPackPath = PackageRoot + "/Editor/TexturePacker_FastPack.compute";
 
@@ -33,7 +33,7 @@ namespace MythicFoundry.TexturePacker.Editor
 
         private const string LegacyUserSettingsPath = UserSettingsFolder + "/TexturePackerSettings.asset";
 
-        private const string UserDefaultPresetPath = UserSettingsFolder + "/TexturePackerDefault.asset";
+        private const string UserDefaultPresetPath = UserSettingsFolder + "/TexturePacker_Default.asset";
 
         // Use a compute shader to greatly speed up packing time
         [SerializeField]
@@ -143,6 +143,7 @@ namespace MythicFoundry.TexturePacker.Editor
             _channels[1].input = null;
             _channels[2].input = null;
             _channels[3].input = null;
+            SaveChannelInputs();
         }
 
         private void OnGUI()
@@ -185,8 +186,10 @@ namespace MythicFoundry.TexturePacker.Editor
             EditorGUI.BeginDisabledGroup(!fastPack);
             if (GUILayout.Button("Pack Texture") && _textureDimensions != Vector2Int.zero)
             {
-                CreatePackedTexture();
-                SaveTexture();
+                if (CreatePackedTexture())
+                {
+                    SaveTexture();
+                }
                 EditorUtility.ClearProgressBar();
             }
 
@@ -274,23 +277,31 @@ namespace MythicFoundry.TexturePacker.Editor
                 TextureChannel channel = _channels[channelInput];
                 
                 GUILayout.BeginVertical(EditorStyles.helpBox);
-                channel.input = (Texture2D)EditorGUILayout.ObjectField($"{preset?[channelInput].name} Input",
-                    channel.input, typeof(Texture2D), false);
-
+                EditorGUI.BeginChangeCheck();
+                Texture2D? selectedInput = EditorGUILayout.ObjectField($"{preset?[channelInput].name} Input",
+                    channel.input, typeof(Texture2D), false) as Texture2D;
+                if (EditorGUI.EndChangeCheck())
+                {
+                    channel.input = selectedInput;
+                    SaveChannelInput(channelInput);
+                }
                 Texture2D? textureInput = channel.input;
+                if (textureInput && _textureDimensions != Vector2Int.zero &&
+                    (textureInput.width != _textureDimensions.x || textureInput.height != _textureDimensions.y))
+                {
+                    channel.input = null;
+                    textureInput = null;
+                    SaveChannelInput(channelInput);
+                    Debug.LogWarning("Input texture is not the same resolution as other textures! Rejecting");
+                }
+
                 if (!textureInput)
                 {
                     GUILayout.Label($"No {preset?[channelInput].name} Input, use slider to set value", _regularSmall);
                     channel.@default = EditorGUILayout.Slider(channel.@default, 0f, 1f);
+                    DoOutputChannelField(channelInput, channel);
                     GUILayout.EndVertical();
                     return;
-                }
-
-                if (_textureDimensions != Vector2Int.zero && (textureInput.width != _textureDimensions.x ||
-                                                              textureInput.height != _textureDimensions.y))
-                {
-                    channel.input = null;
-                    Debug.LogWarning("Input texture is not the same resolution as other textures! Rejecting");
                 }
 
                 if (_textureDimensions == Vector2Int.zero)
@@ -301,6 +312,7 @@ namespace MythicFoundry.TexturePacker.Editor
                 }
 
                 channel.from = (ColorChannel)EditorGUILayout.EnumPopup("From Channel", channel.from);
+                DoOutputChannelField(channelInput, channel);
                 channel.mult = EditorGUILayout.Slider("Multiplier", channel.mult, 0f, 1f);
                 channel.invert = EditorGUILayout.Toggle("Invert", channel.invert);
                 if (textureInput && textureInput.graphicsFormat.ToString().Contains("SRGB"))
@@ -310,20 +322,33 @@ namespace MythicFoundry.TexturePacker.Editor
 
                 GUILayout.EndVertical();
             }
+            
+            void DoOutputChannelField(int channelInput, TextureChannel channel)
+            {
+                EditorGUI.BeginChangeCheck();
+                channel.to = (ColorChannel)EditorGUILayout.EnumPopup("To Channel", channel.to);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    SaveChannelOutput(channelInput);
+                }
+            }
         }
 
-        private void SetChannelValues()
+        private bool SetChannelValues()
         {
             if (!fastPack)
             {
                 Debug.LogError("Texture Packer compute shader was not found.");
-                return;
+                return false;
             }
 
-            TextureChannel rChannel = _channels[0];
-            TextureChannel gChannel = _channels[1];
-            TextureChannel bChannel = _channels[2];
-            TextureChannel aChannel = _channels[3];
+            if (!TryGetChannelsByOutput(out TextureChannel[] outputChannels))
+                return false;
+
+            TextureChannel rChannel = outputChannels[(int)ColorChannel.R];
+            TextureChannel gChannel = outputChannels[(int)ColorChannel.G];
+            TextureChannel bChannel = outputChannels[(int)ColorChannel.B];
+            TextureChannel aChannel = outputChannels[(int)ColorChannel.A];
             
             // Send textures to compute shader
             int kernel = fastPack.FindKernel("CSMain");
@@ -350,14 +375,15 @@ namespace MythicFoundry.TexturePacker.Editor
                 bChannel.input ? bChannel.mult : 1,
                 aChannel.input ? aChannel.mult : 1);
             fastPack.Dispatch(kernel, _textureDimensions.x, _textureDimensions.y, 1);
+            return true;
         }
 
-        private void CreatePackedTexture()
+        private bool CreatePackedTexture()
         {
             if (!fastPack)
             {
                 Debug.LogError("Texture Packer compute shader was not found.");
-                return;
+                return false;
             }
 
             _finalTexture = new Texture2D(_textureDimensions.x, _textureDimensions.y, TextureFormat.ARGB32, false,
@@ -381,7 +407,8 @@ namespace MythicFoundry.TexturePacker.Editor
                 };
                 _packedTexture.Create();
 
-                SetChannelValues();
+                if (!SetChannelValues())
+                    return false;
 
                 // Final output
                 RenderTexture previous = RenderTexture.active;
@@ -396,7 +423,7 @@ namespace MythicFoundry.TexturePacker.Editor
                 GeneratePreview();
             }
 
-            return;
+            return true;
 
             // Prepare textures for packing
             void _PackTexture(int channelInput)
@@ -434,7 +461,7 @@ namespace MythicFoundry.TexturePacker.Editor
             Texture2D? validTex = GetFirstValidTexture();
 
             string? texPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(validTex));
-            if (string.IsNullOrEmpty(texPath) || texPath.StartsWith("Packages/"))
+            if (string.IsNullOrEmpty(texPath) || texPath!.StartsWith("Packages/"))
             {
                 texPath = "Assets";
             }
@@ -451,15 +478,30 @@ namespace MythicFoundry.TexturePacker.Editor
                 Debug.Log($"Packed texture saved to: {path}");
                 AssetDatabase.Refresh();
 
-                // Disable sRGB
-                TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
-                importer.sRGBTexture = false;
-                importer.SaveAndReimport();
+                ConfigurePackedTextureImporter(path, exportFormat);
             }
             else
             {
                 EditorUtility.ClearProgressBar();
             }
+        }
+
+        private static void ConfigurePackedTextureImporter(string path, ImageExportFormat format)
+        {
+            TextureImporter? importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null)
+            {
+                Debug.LogWarning($"Packed texture saved, but no TextureImporter was found at: {path}");
+                return;
+            }
+
+            importer.textureType = TextureImporterType.Default;
+            importer.sRGBTexture = false;
+            importer.alphaIsTransparency = false;
+            importer.alphaSource = format == ImageExportFormat.JPG
+                ? TextureImporterAlphaSource.None
+                : TextureImporterAlphaSource.FromInput;
+            importer.SaveAndReimport();
         }
 
         private void LoadSettings()
@@ -476,7 +518,7 @@ namespace MythicFoundry.TexturePacker.Editor
 
                     if (!preset)
                     {
-                        preset = LoadFirstAsset<TexturePackerPreset>("TexturePackerDefault t:TexturePackerPreset");
+                        preset = LoadFirstAsset<TexturePackerPreset>("TexturePacker_Default t:TexturePackerPreset");
                     }
 
                     if (!preset)
@@ -505,6 +547,8 @@ namespace MythicFoundry.TexturePacker.Editor
                 textureChannel.@default = texturePackerChannel.@default;
                 textureChannel.from = texturePackerChannel.from;
                 textureChannel.invert = texturePackerChannel.invert;
+                textureChannel.to = currentSettings.GetLastOutput(index);
+                textureChannel.input = currentSettings.GetLastInput(index);
             }
 
             // Load preview shader
@@ -522,6 +566,8 @@ namespace MythicFoundry.TexturePacker.Editor
 
         private static void MigrateLegacySettings(TexturePackerSettings settings)
         {
+            settings.EnsureLastInputs();
+            settings.EnsureLastOutputs();
             if (settings.lastPreset)
                 return;
 
@@ -534,11 +580,53 @@ namespace MythicFoundry.TexturePacker.Editor
             settings.SaveSettings();
         }
 
+        private void SaveChannelInput(int channelIndex)
+        {
+            if (!settings)
+                return;
+
+            TextureChannel channel = _channels[channelIndex];
+            if (settings.SetLastInput(channelIndex, channel.input))
+            {
+                settings.SaveSettings();
+            }
+        }
+        
+        private void SaveChannelOutput(int channelIndex)
+        {
+            if (!settings)
+                return;
+
+            TextureChannel channel = _channels[channelIndex];
+            if (settings.SetLastOutput(channelIndex, channel.to))
+            {
+                settings.SaveSettings();
+            }
+        }
+
+        private void SaveChannelInputs()
+        {
+            if (!settings)
+                return;
+
+            bool changed = false;
+            for (int index = 0; index < _channels.Length; index++)
+            {
+                TextureChannel channel = _channels[index];
+                changed |= settings.SetLastInput(index, channel.input);
+            }
+
+            if (changed)
+            {
+                settings.SaveSettings();
+            }
+        }
+
         private void SavePreset()
         {
             // Create new preset SO
             string? presetPath = Path.GetDirectoryName(AssetDatabase.GetAssetPath(preset));
-            if (string.IsNullOrEmpty(presetPath) || presetPath.StartsWith("Packages/"))
+            if (string.IsNullOrEmpty(presetPath) || presetPath!.StartsWith("Packages/"))
                 presetPath = UserSettingsFolder;
             EnsureProjectFolder(UserSettingsFolder);
 
@@ -575,6 +663,61 @@ namespace MythicFoundry.TexturePacker.Editor
             Debug.Log($"Preset saved to: {path}");
             AssetDatabase.Refresh();
         }
+        
+        private bool TryGetChannelsByOutput(out TextureChannel[] outputChannels)
+        {
+            TextureChannel?[] mappedChannels = new TextureChannel?[TexturePackerSettings.ChannelCount];
+
+            for (int index = 0; index < _channels.Length; index++)
+            {
+                TextureChannel channel = _channels[index];
+                int outputIndex = (int)channel.to;
+                if (!IsValidOutputIndex(outputIndex))
+                {
+                    outputChannels = new TextureChannel[0];
+                    Debug.LogError($"Texture Packer channel '{GetChannelLabel(index)}' has invalid output channel '{channel.to}'.");
+                    return false;
+                }
+
+                if (mappedChannels[outputIndex] != null)
+                {
+                    outputChannels = new TextureChannel[0];
+                    Debug.LogError($"Texture Packer output channel '{channel.to}' is assigned more than once. Choose a unique To Channel for each row.");
+                    return false;
+                }
+
+                mappedChannels[outputIndex] = channel;
+            }
+
+            outputChannels = new TextureChannel[TexturePackerSettings.ChannelCount];
+            for (int index = 0; index < mappedChannels.Length; index++)
+            {
+                TextureChannel? channel = mappedChannels[index];
+                if (channel == null)
+                {
+                    outputChannels = new TextureChannel[0];
+                    Debug.LogError($"Texture Packer output channel '{(ColorChannel)index}' is not assigned. Choose a unique To Channel for each row.");
+                    return false;
+                }
+
+                outputChannels[index] = channel;
+            }
+
+            return true;
+        }
+        
+        private string GetChannelLabel(int channelIndex)
+        {
+            if (!preset || preset.channels == null || channelIndex < 0 || channelIndex >= preset.channels.Length)
+                return ((ColorChannel)channelIndex).ToString();
+
+            return preset.channels[channelIndex].name;
+        }
+
+        private static bool IsValidOutputIndex(int outputIndex)
+        {
+            return outputIndex >= 0 && outputIndex < TexturePackerSettings.ChannelCount;
+        }
 
         private void LoadPackageAssets()
         {
@@ -589,8 +732,7 @@ namespace MythicFoundry.TexturePacker.Editor
             }
         }
 
-        private static T? LoadFirstAsset<T>(string filter, string[]? searchInFolders = null)
-            where T : UnityEngine.Object
+        private static T? LoadFirstAsset<T>(string filter, string[]? searchInFolders = null) where T : Object
         {
             string[] guids = searchInFolders == null
                 ? AssetDatabase.FindAssets(filter)
@@ -793,14 +935,6 @@ namespace MythicFoundry.TexturePacker.Editor
             TGA,
             PNG,
             JPG
-        }
-
-        public enum ColorChannel
-        {
-            R,
-            G,
-            B,
-            A
         }
     }
 }

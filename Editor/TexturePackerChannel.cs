@@ -12,7 +12,7 @@ namespace MythicFoundry.TexturePacker.Editor
         
         public float @default = 1;
         
-        public TexturePacker.ColorChannel from;
+        public ColorChannel from;
         
         public bool invert;
 

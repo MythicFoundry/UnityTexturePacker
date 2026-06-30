@@ -14,7 +14,9 @@ namespace MythicFoundry.TexturePacker.Editor
 
         public float mult = 1;
 
-        public TexturePacker.ColorChannel from;
+        public ColorChannel from;
+        
+        public ColorChannel to;
 
         public bool invert;
 
